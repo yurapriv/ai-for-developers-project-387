@@ -1,0 +1,121 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"net"
+	"net/http"
+	"os"
+	"os/signal"
+	"strconv"
+	"syscall"
+	"time"
+	_ "time/tzdata"
+
+	"github.com/yurapriv/ai-for-developers-project-387/internal/server"
+)
+
+func main() {
+	if err := run(); err != nil {
+		log.Print(err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	clock := time.Now
+	if os.Getenv("E2E_MODE") == "1" && os.Getenv("E2E_FIXED_NOW") != "" {
+		fixed, err := time.Parse(time.RFC3339Nano, os.Getenv("E2E_FIXED_NOW"))
+		if err != nil {
+			return fmt.Errorf("invalid E2E_FIXED_NOW: %w", err)
+		}
+		clock = func() time.Time { return fixed }
+		if path := os.Getenv("E2E_CLOCK_FILE"); path != "" {
+			clock = func() time.Time {
+				value, err := os.ReadFile(path)
+				if errors.Is(err, os.ErrNotExist) {
+					return fixed
+				}
+				if err != nil {
+					panic(fmt.Errorf("read E2E clock: %w", err))
+				}
+				current, err := time.Parse(time.RFC3339Nano, string(value))
+				if err != nil {
+					panic(fmt.Errorf("invalid E2E clock: %w", err))
+				}
+				return current
+			}
+		}
+	}
+	handler, err := server.NewHandlerWithClock(clock)
+	if err != nil {
+		return fmt.Errorf("initialize API: %w", err)
+	}
+	if dir := os.Getenv("FRONTEND_DIR"); dir != "" {
+		handler = server.WithFrontend(handler, os.DirFS(dir))
+	}
+	address, err := listenAddress(os.LookupEnv)
+	if err != nil {
+		return err
+	}
+	listener, err := net.Listen("tcp", address)
+	if err != nil {
+		return fmt.Errorf("listen: %w", err)
+	}
+	defer func() { _ = listener.Close() }()
+
+	srv := &http.Server{
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if err := json.NewEncoder(os.Stdout).Encode(struct {
+		Event   string `json:"event"`
+		Address string `json:"address"`
+	}{"listening", listener.Addr().String()}); err != nil {
+		return fmt.Errorf("report address: %w", err)
+	}
+	result := make(chan error, 1)
+	go func() { result <- srv.Serve(listener) }()
+	select {
+	case err := <-result:
+		if !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
+		return nil
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return srv.Shutdown(shutdownCtx)
+	}
+}
+
+func listenAddress(lookup func(string) (string, bool)) (string, error) {
+	if port, present := lookup("PORT"); present {
+		if port == "" {
+			return "", errors.New("invalid PORT: expected a decimal port from 1 to 65535")
+		}
+		for _, digit := range port {
+			if digit < '0' || digit > '9' {
+				return "", errors.New("invalid PORT: expected a decimal port from 1 to 65535")
+			}
+		}
+		value, err := strconv.ParseUint(port, 10, 16)
+		if err != nil || value == 0 {
+			return "", errors.New("invalid PORT: expected a decimal port from 1 to 65535")
+		}
+		return net.JoinHostPort("0.0.0.0", strconv.FormatUint(value, 10)), nil
+	}
+	if address, _ := lookup("LISTEN_ADDR"); address != "" {
+		return address, nil
+	}
+	return "127.0.0.1:8080", nil
+}
