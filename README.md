@@ -7,9 +7,8 @@
 Учебный проект Хекслета: https://ru.hexlet.io/programs/ai-for-developers
 Как это должно работать: https://files.hexlet.app/a/2ipc5m
 
-Адрес приложения предыдущего проекта: https://calendar-booking-yurapriv.onrender.com.
-При проверке страницы `/` и `/booking` отвечали 404, поэтому работа интерфейса не подтверждена.
-Для проверки используйте [локальный запуск в контейнере](#запуск-в-контейнере).
+Приложение предыдущего проекта: https://calendar-booking-yurapriv.onrender.com/booking.
+Если приложение недоступно, используйте [локальный запуск в контейнере](#запуск-в-контейнере).
 
 Исходный проект: [репозиторий 386](https://github.com/yurapriv/ai-for-developers-project-386),
 [спецификация](https://github.com/yurapriv/ai-for-developers-project-386/issues/4),
