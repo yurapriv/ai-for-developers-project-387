@@ -137,8 +137,9 @@ function browserTests() {
   local('@playwright/test', ['test'], 'playwright');
 }
 
-// Shared Go and browser test sequence; callers own their build step.
+// Shared workflow, Go and browser test sequence; callers own their build step.
 function runTests() {
+  run(process.execPath, ['--test', 'tests/opencode-gate.test.cjs']);
   run('go', ['test', '-count=1', '-timeout=120s', './...']);
   browserTests();
 }
