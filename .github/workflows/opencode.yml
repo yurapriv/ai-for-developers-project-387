@@ -129,15 +129,7 @@ jobs:
             echo "::error::Missing OPENCODE_API_KEY"
             exit 1
           fi
-          case "$OPENCODE_MODEL" in
-            opencode/deepseek-v4.1-flash-free|opencode/mimo-v2.6-flash-free|opencode/flint-40b-free) ;;
-            *)
-              echo "reason=infra" >> "$GITHUB_OUTPUT"
-              echo "::error::OPENCODE_MODEL must be a supported free OpenCode model"
-              exit 1
-              ;;
-          esac
-          echo "OpenCode model: $OPENCODE_MODEL"
+          printf 'OpenCode model: %q\n' "$OPENCODE_MODEL"
           OPENCODE_CONFIG_CONTENT=$(node -p 'JSON.stringify({ ...JSON.parse(process.env.OPENCODE_CONFIG_CONTENT), small_model: process.env.OPENCODE_MODEL })')
           export OPENCODE_CONFIG_CONTENT MODEL="$OPENCODE_MODEL"
           code=0
