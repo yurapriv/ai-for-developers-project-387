@@ -7,7 +7,7 @@ function event(overrides = {}) {
     eventName: 'issue_comment',
     repo: { owner: 'owner', repo: 'project' },
     payload: {
-      repository: { id: 42, owner: { login: 'owner' } },
+      repository: { id: 42, owner: { login: 'owner' }, default_branch: 'main' },
       comment: { user: { login: 'owner', type: 'User' }, body: '/oc explain' },
       issue: { number: 123 },
       ...overrides,
@@ -16,7 +16,18 @@ function event(overrides = {}) {
 }
 
 function github(headId = 42) {
-  return { rest: { pulls: { get: async () => ({ data: { head: { repo: { id: headId } } } }) } } };
+  return {
+    rest: {
+      pulls: {
+        get: async () => ({
+          data: {
+            state: 'open',
+            head: { repo: { id: headId }, ref: 'feature', sha: 'f'.repeat(40) },
+          },
+        }),
+      },
+    },
+  };
 }
 
 test('accepts owner commands on issues', async () => {
@@ -37,6 +48,7 @@ test('rejects other authors, bots and comments without a command', async () => {
     { user: { login: 'other', type: 'User' }, body: '/oc explain' },
     { user: { login: 'owner', type: 'Bot' }, body: '/oc explain' },
     { user: { login: 'owner', type: 'User' }, body: 'hello' },
+    { user: { login: 'owner', type: 'User' }, body: 'https://example.test/oc' },
   ]) {
     assert.equal(await allowOpenCode({ context: event({ comment }), github: github() }), false);
   }

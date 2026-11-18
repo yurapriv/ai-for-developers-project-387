@@ -1,0 +1,118 @@
+name: PR review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: >-
+      !github.event.pull_request.draft &&
+      github.event.pull_request.head.repo.id == github.event.repository.id &&
+      github.event.pull_request.head.ref != github.event.repository.default_branch &&
+      ((github.event.pull_request.user.type == 'User' &&
+       github.event.pull_request.user.login == github.repository_owner) ||
+       (github.event.pull_request.user.type == 'Bot' &&
+       github.event.pull_request.user.id == 219766164 &&
+       github.event.pull_request.user.login == 'opencode-agent[bot]'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: read
+      actions: read
+      checks: read
+      statuses: read
+      pull-requests: read
+    outputs:
+      review: ${{ steps.review.outputs.text }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Read base REVIEW.md, PR, linked material and CI
+        id: context
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -f REVIEW.md || ! -f .github/scripts/review-context.mjs ]]; then
+            echo "::notice::Review policy must be present on the base branch first"
+            exit 0
+          fi
+          mkdir -p "$RUNNER_TEMP/reviewer"
+          node .github/scripts/review-context.mjs > "$RUNNER_TEMP/review-prompt.txt"
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Install pinned OpenCode CLI
+        if: steps.context.outputs.ready == 'true'
+        run: bash .github/scripts/install-opencode.sh
+
+      - name: Generate read-only review (no GitHub token)
+        id: review
+        if: steps.context.outputs.ready == 'true'
+        timeout-minutes: 6
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          OPENCODE_DISABLE_PROJECT_CONFIG: 'true'
+          OPENCODE_CONFIG_CONTENT: '{"permission":{"*":"deny"},"share":"disabled","small_model":"opencode/deepseek-v4.1-flash-free"}'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$OPENCODE_API_KEY" ]]; then
+            echo "::error::Missing OPENCODE_API_KEY"
+            exit 1
+          fi
+          cd "$RUNNER_TEMP/reviewer"
+          timeout --kill-after=15s 5m opencode run --model opencode/deepseek-v4.1-flash-free --format json \
+            < "$RUNNER_TEMP/review-prompt.txt" > "$RUNNER_TEMP/review.jsonl"
+          node --input-type=module - "$RUNNER_TEMP/review.jsonl" <<'NODE' >> "$GITHUB_OUTPUT"
+          import { readFileSync } from 'node:fs';
+          const events = readFileSync(process.argv[2], 'utf8').trim().split('\n').map(JSON.parse);
+          if (events.some((event) => event.type === 'error' || event.type === 'tool_use')) {
+            throw new Error('Review failed or attempted to use a tool');
+          }
+          const text = events.filter((event) => event.type === 'text').map((event) => event.part.text).join('\n').trim();
+          if (!text || text.length > 20_000) throw new Error('Invalid review length');
+          console.log(`text=${Buffer.from(text).toString('base64')}`);
+          NODE
+
+  publish:
+    needs: review
+    if: needs.review.outputs.review != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Publish only if the reviewed head is still current
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REVIEW_B64: ${{ needs.review.outputs.review }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json headRefOid,state --jq 'select(.state == "OPEN") | .headRefOid')
+          if [[ "$actual" != "$HEAD_SHA" ]]; then
+            echo "::notice::Review is no longer current"
+            exit 0
+          fi
+          body="$RUNNER_TEMP/review.md"
+          printf '## Независимое авторевью\n\nHead SHA: `%s` · [прогон](%s/%s/actions/runs/%s)\n\n' \
+            "$HEAD_SHA" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" > "$body"
+          printf '%s' "$REVIEW_B64" | base64 --decode >> "$body"
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file "$body"
