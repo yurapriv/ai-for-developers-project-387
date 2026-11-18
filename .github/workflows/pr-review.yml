@@ -67,7 +67,8 @@ jobs:
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           OPENCODE_DISABLE_PROJECT_CONFIG: 'true'
-          OPENCODE_CONFIG_CONTENT: '{"permission":{"*":"deny"},"share":"disabled","small_model":"opencode/deepseek-v4.1-flash-free"}'
+          OPENCODE_MODEL: ${{ vars.OPENCODE_MODEL || 'opencode/deepseek-v4.1-flash-free' }}
+          OPENCODE_CONFIG_CONTENT: '{"permission":{"*":"deny"},"share":"disabled"}'
         shell: bash
         run: |
           set -euo pipefail
@@ -75,9 +76,27 @@ jobs:
             echo "::error::Missing OPENCODE_API_KEY"
             exit 1
           fi
+          printf 'OpenCode model: %q\n' "$OPENCODE_MODEL"
+          OPENCODE_CONFIG_CONTENT=$(node -p 'JSON.stringify({ ...JSON.parse(process.env.OPENCODE_CONFIG_CONTENT), small_model: process.env.OPENCODE_MODEL })')
+          export OPENCODE_CONFIG_CONTENT
           cd "$RUNNER_TEMP/reviewer"
-          timeout --kill-after=15s 5m opencode run --model opencode/deepseek-v4.1-flash-free --format json \
-            < "$RUNNER_TEMP/review-prompt.txt" > "$RUNNER_TEMP/review.jsonl"
+          stderr="$RUNNER_TEMP/review-stderr.log"
+          code=0
+          timeout --kill-after=15s 5m opencode --print-logs --log-level ERROR run \
+            --title 'Independent PR review' --model "$OPENCODE_MODEL" --format json \
+            < "$RUNNER_TEMP/review-prompt.txt" > "$RUNNER_TEMP/review.jsonl" 2> "$stderr" || code=$?
+          if (( code != 0 )); then
+            reason=cli_failed
+            if grep -Eiq 'Free usage limit reached|Too Many Requests|rate[ _-]+limit([ _-]+(reached|exceeded)|ed)' "$stderr"; then
+              reason=provider_rate_limited
+            elif grep -Eiq 'ProviderModelNotFoundError|invalid api key|Unauthorized' "$stderr"; then
+              reason=provider_unavailable
+            elif [[ "$code" == 124 ]]; then
+              reason=timeout
+            fi
+            echo "::error::Author review failed: $reason (exit $code). Raw provider logs are not published."
+            exit "$code"
+          fi
           node --input-type=module - "$RUNNER_TEMP/review.jsonl" <<'NODE' >> "$GITHUB_OUTPUT"
           import { readFileSync } from 'node:fs';
           const events = readFileSync(process.argv[2], 'utf8').trim().split('\n').map(JSON.parse);
