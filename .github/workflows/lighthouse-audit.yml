@@ -74,20 +74,30 @@ jobs:
         timeout-minutes: 5
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          OPENCODE_MODEL: ${{ vars.OPENCODE_MODEL || 'opencode/deepseek-v4.1-flash-free' }}
           OPENCODE_CONFIG_CONTENT: >-
             {"agents":{"audit":{"description":"Read-only Lighthouse analysis","mode":"primary",
-            "permissions":[{"action":"*","resource":"*","effect":"deny"}]}},
-            "small_model":"opencode/deepseek-v4.1-flash-free"}
+            "permissions":[{"action":"*","resource":"*","effect":"deny"}]}}}
         shell: bash
         run: |
           set -euo pipefail
           : "${OPENCODE_API_KEY:?Missing OPENCODE_API_KEY}"
+          case "$OPENCODE_MODEL" in
+            opencode/deepseek-v4.1-flash-free|opencode/mimo-v2.6-flash-free) ;;
+            *)
+              echo "::error::OPENCODE_MODEL must be a supported free OpenCode model"
+              exit 1
+              ;;
+          esac
+          echo "OpenCode model: $OPENCODE_MODEL"
+          OPENCODE_CONFIG_CONTENT=$(node -p 'JSON.stringify({ ...JSON.parse(process.env.OPENCODE_CONFIG_CONTENT), small_model: process.env.OPENCODE_MODEL })')
+          export OPENCODE_CONFIG_CONTENT
           # Outside checkout: no project instructions, plugins or MCP credentials.
           mkdir -p "$RUNNER_TEMP/lighthouse-agent"
           cd "$RUNNER_TEMP/lighthouse-agent"
           status=0
           "$RUNNER_TEMP/audit-cli/node_modules/.bin/opencode" --standalone run \
-            --agent audit --model opencode/deepseek-v4.1-flash-free --format json --archived \
+            --agent audit --model "$OPENCODE_MODEL" --format json --archived \
             < "$RUNNER_TEMP/lighthouse-input/prompt.txt" > "$RUNNER_TEMP/lighthouse-agent.jsonl" || status=$?
           node "$GITHUB_WORKSPACE/.github/scripts/lighthouse-audit.mjs" verify \
             "$RUNNER_TEMP/lighthouse-input" "$RUNNER_TEMP/lighthouse-agent.jsonl" "$status"

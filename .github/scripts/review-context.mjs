@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { reviewLinks } from './review-links.mjs';
 
 const { GITHUB_REPOSITORY: repo, PR: pr, HEAD_SHA: head } = process.env;
 const [owner] = repo.split('/');
@@ -25,30 +26,8 @@ const pull = JSON.parse(
 );
 if (pull.headRefOid !== head) throw new Error('PR head no longer matches this workflow run');
 
-function field(label) {
-  return pull.body.match(new RegExp(`^${label}:[ \\t]*(.*)$`, 'im'))?.[1] ?? '';
-}
-
-function issueNumbers(value) {
-  const uncommented = value.replaceAll(/<!--.*?-->/g, '');
-  const withoutUrls = uncommented.replaceAll(
-    /https:\/\/github\.com\/([^/\s]+\/[^/\s]+)\/issues\/([1-9]\d*)(?:#[\w-]+)?/g,
-    (_, linkedRepo, number) =>
-      linkedRepo.toLowerCase() === repo.toLowerCase() ? ` #${number}` : '',
-  );
-  return [...new Set([...withoutUrls.matchAll(/(?:^|[ (\[,])#([1-9]\d*)\b/g)].map((m) => m[1]))];
-}
-
-const source = issueNumbers(field('Исходное обращение'));
-const spec = issueNumbers(field('Спецификация'));
-const tickets = issueNumbers(field('Тикеты'));
-const escapedRepo = repo.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const approval = field('Согласование').match(
-  new RegExp(
-    `https://github\\.com/${escapedRepo}/issues/([1-9]\\d*)#issuecomment-([1-9]\\d*)`,
-    'i',
-  ),
-);
+const { source, spec, tickets, approval } = reviewLinks(pull.body, repo);
+const approvalId = approval?.match(/#issuecomment-(\d+)$/i)?.[1];
 
 const issues = [...new Set([...source, ...spec, ...tickets])]
   .slice(0, 12)
@@ -56,10 +35,10 @@ const issues = [...new Set([...source, ...spec, ...tickets])]
     id,
     data(['api', `repos/${repo}/issues/${id}`, '--jq', '{html_url,title,body,state,pull_request}']),
   ]);
-const approvalData = approval
+const approvalData = approvalId
   ? data([
       'api',
-      `repos/${repo}/issues/comments/${approval[2]}`,
+      `repos/${repo}/issues/comments/${approvalId}`,
       '--jq',
       '{issue_url,html_url,user:.user.login,body}',
     ])
@@ -116,7 +95,7 @@ ${readFileSync('REVIEW.md', 'utf8')}
 Исходное обращение: ${JSON.stringify(source)}
 Спецификация: ${JSON.stringify(spec)}
 Тикеты: ${JSON.stringify(tickets)}
-Согласование (ссылка): ${approval?.[0] ?? '[нет]'}
+Согласование (ссылка): ${approval ?? '[нет]'}
 Согласование (из GitHub): ${approvalData}
 Тело PR: ${pull.body.slice(0, 12_000)}
 Issues: ${JSON.stringify(issues)}

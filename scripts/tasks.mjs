@@ -143,6 +143,7 @@ function runTests() {
     '--test',
     'tests/opencode-gate.test.cjs',
     'tests/opencode-budget.test.cjs',
+    'tests/review-links.test.mjs',
     'tests/triage-gate.test.cjs',
     'tests/lighthouse-audit.test.mjs',
   ]);
