@@ -1,0 +1,114 @@
+name: Lighthouse audit
+
+on:
+  schedule:
+    - cron: '17 3 * * *' # 06:17 Moscow (UTC+3)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'live: Render measurement; demo: synthetic educational report'
+        type: choice
+        options: [live, demo]
+        default: live
+
+permissions: {}
+
+concurrency:
+  group: lighthouse-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    if: github.event_name == 'schedule' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: read
+    env:
+      AUDIT_MODE: ${{ inputs.mode || 'live' }}
+    outputs:
+      result: ${{ steps.analyze.outputs.result }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24.22.2'
+          package-manager-cache: false
+      - name: Collect original report
+        timeout-minutes: 7
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          reports="$RUNNER_TEMP/lighthouse-reports"
+          mkdir -p "$reports"
+          script="$GITHUB_WORKSPACE/.github/scripts/lighthouse-audit.mjs"
+          node "$script" prepare "$reports"
+          if [[ "$AUDIT_MODE" == live ]]; then
+            cd "$RUNNER_TEMP"
+            export CHROME_PATH="$(command -v google-chrome)"
+            npm exec --yes --package=@lhci/cli@0.16.1 -- lhci collect --no-lighthouserc \
+              --url="$APP_URL" --numberOfRuns=3 --settings.onlyCategories=performance
+            cp .lighthouseci/lhr-*.{json,html} "$reports/"
+          fi
+      - name: Save original report before calling OpenCode
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lighthouse-${{ env.AUDIT_MODE }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/lighthouse-reports/
+          retention-days: 14
+          if-no-files-found: error
+      - name: Prepare measurements and open/closed issues for OpenCode
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APP_URL: ${{ vars.APP_URL }}
+        run: node .github/scripts/lighthouse-audit.mjs prompt "$RUNNER_TEMP/lighthouse-reports" "$RUNNER_TEMP/lighthouse-input"
+      - name: Install pinned OpenCode V2
+        run: npm install --prefix "$RUNNER_TEMP/audit-cli" --no-audit --no-fund @opencode/cli@2.3.2
+      - name: Analyze the report without a GitHub token
+        id: analyze
+        timeout-minutes: 5
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          OPENCODE_CONFIG_CONTENT: >-
+            {"agents":{"audit":{"description":"Read-only Lighthouse analysis","mode":"primary",
+            "permissions":[{"action":"*","resource":"*","effect":"deny"}]}},
+            "small_model":"opencode/deepseek-v4.1-flash-free"}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${OPENCODE_API_KEY:?Missing OPENCODE_API_KEY}"
+          # Outside checkout: no project instructions, plugins or MCP credentials.
+          mkdir -p "$RUNNER_TEMP/lighthouse-agent"
+          cd "$RUNNER_TEMP/lighthouse-agent"
+          status=0
+          "$RUNNER_TEMP/audit-cli/node_modules/.bin/opencode" --standalone run \
+            --agent audit --model opencode/deepseek-v4.1-flash-free --format json --archived \
+            < "$RUNNER_TEMP/lighthouse-input/prompt.txt" > "$RUNNER_TEMP/lighthouse-agent.jsonl" || status=$?
+          node "$GITHUB_WORKSPACE/.github/scripts/lighthouse-audit.mjs" verify \
+            "$RUNNER_TEMP/lighthouse-input" "$RUNNER_TEMP/lighthouse-agent.jsonl" "$status"
+
+  publish:
+    needs: audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24.22.2'
+          package-manager-cache: false
+      - name: Resolve duplicate, record status or create one issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AUDIT_RESULT: ${{ needs.audit.outputs.result }}
+        run: node .github/scripts/lighthouse-audit.mjs publish
