@@ -74,6 +74,7 @@ export function UpcomingBookings() {
                 <p>
                   {booking.name} · {booking.email}
                 </p>
+                {booking.topic && <p>Тема: {booking.topic}</p>}
               </li>
             ))}
           </ul>

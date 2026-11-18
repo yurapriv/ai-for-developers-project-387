@@ -179,6 +179,8 @@ components:
           type: string
         email:
           type: string
+        topic:
+          type: string
     BookingInput:
       type: object
       required:
@@ -196,6 +198,8 @@ components:
         name:
           type: string
         email:
+          type: string
+        topic:
           type: string
     BookingWindow:
       type: object

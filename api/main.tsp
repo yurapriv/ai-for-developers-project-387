@@ -111,6 +111,9 @@ model BookingInput {
   start: offsetDateTime;
   name: string;
   email: string;
+
+  // Необязательная тема разговора: краткий однострочный текст гостя.
+  topic?: string;
 }
 
 model Booking {
@@ -119,6 +122,9 @@ model Booking {
   end: offsetDateTime;
   name: string;
   email: string;
+
+  // Присутствует, только когда гость указал тему разговора.
+  topic?: string;
 }
 
 @get

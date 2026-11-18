@@ -157,7 +157,7 @@ func (o operations) CreateBooking(_ context.Context, req api.CreateBookingReques
 	}
 	start := b.Start.In(o.location)
 	end := start.Add(time.Duration(meetingType.DurationMinutes) * time.Minute)
-	booking := api.Booking{MeetingType: meetingType, Start: start, End: end, Name: name, Email: email}
+	booking := api.Booking{MeetingType: meetingType, Start: start, End: end, Name: name, Email: email, Topic: b.Topic}
 	status := o.bookings.create(booking, func() bool {
 		now := o.now()
 		return o.validSlotTime(start, end, now, o.window(now))
