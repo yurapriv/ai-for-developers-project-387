@@ -1,4 +1,4 @@
-async function allowOpenCode({ context, github }) {
+async function getOpenCodeTarget({ context, github }) {
   const { payload, eventName } = context;
   const comment = payload.comment;
   const owner = payload.repository?.owner?.login;
@@ -8,13 +8,13 @@ async function allowOpenCode({ context, github }) {
     comment?.user?.type !== 'User' ||
     comment.user.login?.toLowerCase() !== owner.toLowerCase() ||
     typeof comment.body !== 'string' ||
-    !['/oc', '/opencode'].some((mention) => comment.body.toLowerCase().includes(mention))
+    !/^\/(?:oc|opencode)(?: |$)/i.test(comment.body)
   ) {
-    return false;
+    return null;
   }
 
   if (eventName === 'issue_comment' && !payload.issue?.pull_request) {
-    return Boolean(payload.issue?.number);
+    return payload.issue?.number ? { issue: payload.issue.number } : null;
   }
 
   const number =
@@ -24,13 +24,25 @@ async function allowOpenCode({ context, github }) {
         ? payload.pull_request?.number
         : undefined;
 
-  if (!number) return false;
+  if (!number) return null;
 
   const { data: pull } = await github.rest.pulls.get({
     ...context.repo,
     pull_number: number,
   });
-  return Boolean(pull.head?.repo?.id && pull.head.repo.id === payload.repository.id);
+  if (
+    pull.state !== 'open' ||
+    pull.head?.repo?.id !== payload.repository.id ||
+    pull.head?.ref === payload.repository.default_branch ||
+    !/^[a-f0-9]{40}$/.test(pull.head?.sha)
+  ) {
+    return null;
+  }
+  return { number, sha: pull.head.sha };
 }
 
-module.exports = { allowOpenCode };
+async function allowOpenCode(input) {
+  return Boolean(await getOpenCodeTarget(input));
+}
+
+module.exports = { allowOpenCode, getOpenCodeTarget };

@@ -1,6 +1,10 @@
 name: quality
 
-on: push
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
@@ -24,8 +28,8 @@ jobs:
       - run: mise run setup:e2e
       - run: mise run check
         env:
-          CHECK_COMMIT_BASE: ${{ github.event.before }}
-          CHECK_COMMIT_HEAD: ${{ github.sha }}
+          CHECK_COMMIT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CHECK_COMMIT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Upload Playwright artifacts on failure
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -36,3 +40,57 @@ jobs:
             test-results/
           retention-days: 7
           if-no-files-found: ignore
+
+  exact-head-browser:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Verify head SHA
+        id: sha
+        env:
+          EXPECTED: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual=$(git rev-parse HEAD)
+          echo "actual=$actual" >> "$GITHUB_OUTPUT"
+          echo "Checked out $actual"
+          test "$actual" = "$EXPECTED"
+      - uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5
+        with:
+          version: '2026.10.25'
+          cache: false
+          install_args: --locked
+          experimental: true
+      - run: mise run setup
+      - run: mise run setup:e2e
+      - run: mise run build
+      - name: Run Playwright and record successful traces
+        id: browser
+        timeout-minutes: 5
+        run: npm exec -- playwright test --trace on
+      - name: Record checked revision and result
+        if: always()
+        env:
+          EXPECTED: ${{ github.event.pull_request.head.sha }}
+          ACTUAL: ${{ steps.sha.outputs.actual }}
+          OUTCOME: ${{ steps.browser.outcome }}
+        run: |
+          mkdir -p browser-evidence
+          printf 'Expected head: %s\nChecked out: %s\nPlaywright: %s\nCommand: npm exec -- playwright test --trace on\n' \
+            "$EXPECTED" "${ACTUAL:-unavailable}" "${OUTCOME:-not run}" | tee browser-evidence/result.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: browser-${{ github.event.pull_request.head.sha }}-${{ github.run_attempt }}
+          path: |
+            browser-evidence/
+            playwright-report/
+            test-results/
+          retention-days: 14
+          if-no-files-found: error
