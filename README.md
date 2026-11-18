@@ -240,8 +240,10 @@ Workflow использует тот же секрет `OPENCODE_API_KEY`, мо�
 - **`live`** (по умолчанию, в том числе по расписанию) измеряет мобильную
   производительность каталога типов встреч. В Settings → Secrets and variables →
   Actions → Variables задан `APP_URL` со [страницей `/booking` на Render](https://calendar-booking-387-l7ns.onrender.com/booking).
-  Раннер сначала ждёт HTML приложения (`Accept: text/html`), затем Lighthouse CI
-  делает три замера. Сравниваем медианы LCP, CLS и TBT с порогами 2500 мс, 0.1
+  Раннер до двух минут ждёт HTML приложения (`Accept: text/html`), отличая его
+  от [страницы прогрева Render](https://render.com/docs/free#spinning-down-on-idle).
+  HTTP-статусы попыток видны в журнале. Затем Lighthouse CI делает три замера.
+  Сравниваем медианы LCP, CLS и TBT с порогами 2500 мс, 0.1
   и 200 мс. Одного превышения или низкого общего балла недостаточно: нужна
   диагностика и конкретное действие. Недоступность приложения — ошибка, а не
   «находок нет». Проверяется опубликованная версия Render, не код прогона `main`.
@@ -276,9 +278,12 @@ OpenCode V2 получает prompt, числовые измерения, выд
 кода, PR и OIDC не выдаются. Реальные находки получают `needs-triage`: решение
 о реализации принимает владелец.
 
-**Результаты.** Успешные ручные прогоны из `main` и ссылки для сдачи ещё не
-зафиксированы. После запуска здесь останутся ссылки на результат реального
-аудита, созданную задачу и повторный прогон, подтвердивший отсутствие дублей.
+**Результаты.** [Ручной прогон из `main`](https://github.com/yurapriv/ai-for-developers-project-387/actions/runs/44395242897)
+остановился на проверке готовности Render. При повторе Lighthouse завершил все
+три замера: LCP ≈ 912 мс, CLS 0, TBT 45 мс — ниже заданных порогов.
+[Отчёт `lighthouse-live-2`](https://github.com/yurapriv/ai-for-developers-project-387/actions/runs/44395242897/artifacts/14471330367)
+сохранился, но OpenCode получил HTTP 429, поэтому вывод агента и публикация
+ещё не подтверждены. Успешный сквозной прогон и проверка дублей ещё впереди.
 
 Справка: [GitHub Actions: schedule](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule),
 [Lighthouse CI: collect](https://github.com/GoogleChrome/lighthouse-ci/blob/main/docs/configuration.md#collect),
