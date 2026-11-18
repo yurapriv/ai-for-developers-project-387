@@ -89,7 +89,7 @@ jobs:
         run: |
           set -euo pipefail
           case "$OPENCODE_MODEL" in
-            opencode/deepseek-v4.1-flash-free|opencode/mimo-v2.6-flash-free) ;;
+            opencode/deepseek-v4.1-flash-free|opencode/mimo-v2.6-flash-free|opencode/flint-40b-free) ;;
             *)
               echo "::error::OPENCODE_MODEL must be a supported free OpenCode model"
               exit 1

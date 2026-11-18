@@ -83,7 +83,7 @@ jobs:
           set -euo pipefail
           : "${OPENCODE_API_KEY:?Missing OPENCODE_API_KEY}"
           case "$OPENCODE_MODEL" in
-            opencode/deepseek-v4.1-flash-free|opencode/mimo-v2.6-flash-free) ;;
+            opencode/deepseek-v4.1-flash-free|opencode/mimo-v2.6-flash-free|opencode/flint-40b-free) ;;
             *)
               echo "::error::OPENCODE_MODEL must be a supported free OpenCode model"
               exit 1
