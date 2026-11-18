@@ -84,12 +84,14 @@ jobs:
         shell: bash
         run: bash .github/scripts/install-opencode.sh
 
-      - name: Install browser and system dependencies for implementation
+      - name: Install project dependencies and browser for implementation
         if: >-
           steps.gate.outputs.decision == 'allowed' &&
           (steps.gate.outputs.pr != '' || contains(github.event.comment.body, 'implement-spec'))
         shell: bash
-        run: mise run setup:e2e
+        run: |
+          mise run setup
+          mise run setup:e2e
 
       - name: Check project skills
         if: steps.gate.outputs.decision == 'allowed'
