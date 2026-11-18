@@ -21,6 +21,7 @@ import (
 const (
 	fieldValidationMessage  = "Проверьте данные формы"
 	malformedRequestMessage = "Данные запроса не соответствуют форме"
+	topicMaxRunes           = 200
 	// Test-only isolation hook for browser scenarios; outside the API contract.
 	testOnlyResetPath  = "/__e2e/reset"
 	testOnlyResetRoute = http.MethodPost + " " + testOnlyResetPath
@@ -131,6 +132,29 @@ func (o operations) GetAvailability(_ context.Context, req api.GetAvailabilityRe
 	return api.GetAvailability200JSONResponse{Window: window, Slots: slots}, nil
 }
 
+func isTopicLineBreak(r rune) bool {
+	return r == '\n' || r == '\r' || r == '\u0085' || r == '\u2028' || r == '\u2029'
+}
+
+// sanitizeTopic trims edge whitespace and validates the optional conversation
+// topic. A topic that is empty after trimming means the guest gave no topic.
+func sanitizeTopic(topic *string) (*string, *catalog.FieldError) {
+	if topic == nil {
+		return nil, nil
+	}
+	trimmed := strings.TrimSpace(*topic)
+	if trimmed == "" {
+		return nil, nil
+	}
+	if strings.IndexFunc(trimmed, isTopicLineBreak) >= 0 {
+		return nil, &catalog.FieldError{Field: "topic", Message: "Тема разговора должна быть одной строкой"}
+	}
+	if utf8.RuneCountInString(trimmed) > topicMaxRunes {
+		return nil, &catalog.FieldError{Field: "topic", Message: "Тема разговора должна быть не длиннее 200 символов"}
+	}
+	return &trimmed, nil
+}
+
 func (o operations) CreateBooking(_ context.Context, req api.CreateBookingRequestObject) (api.CreateBookingResponseObject, error) {
 	b := req.Body
 	var meetingType api.MeetingType
@@ -152,12 +176,16 @@ func (o operations) CreateBooking(_ context.Context, req api.CreateBookingReques
 	if utf8.RuneCountInString(email) > 254 || len(parts) != 2 || parts[0] == "" || parts[1] == "" || strings.IndexFunc(email, unicode.IsSpace) >= 0 {
 		fields = append(fields, catalog.FieldError{Field: "email", Message: "Введите корректный email"})
 	}
+	topic, topicError := sanitizeTopic(b.Topic)
+	if topicError != nil {
+		fields = append(fields, *topicError)
+	}
 	if len(fields) > 0 {
 		return api.CreateBooking422JSONResponse(problem(fieldValidationMessage, fields)), nil
 	}
 	start := b.Start.In(o.location)
 	end := start.Add(time.Duration(meetingType.DurationMinutes) * time.Minute)
-	booking := api.Booking{MeetingType: meetingType, Start: start, End: end, Name: name, Email: email, Topic: b.Topic}
+	booking := api.Booking{MeetingType: meetingType, Start: start, End: end, Name: name, Email: email, Topic: topic}
 	status := o.bookings.create(booking, func() bool {
 		now := o.now()
 		return o.validSlotTime(start, end, now, o.window(now))
