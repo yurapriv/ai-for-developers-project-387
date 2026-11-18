@@ -143,6 +143,7 @@ function runTests() {
     '--test',
     'tests/opencode-gate.test.cjs',
     'tests/opencode-budget.test.cjs',
+    'tests/review-links.test.mjs',
     'tests/triage-gate.test.cjs',
   ]);
   run('go', ['test', '-count=1', '-timeout=120s', './...']);
