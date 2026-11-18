@@ -2,36 +2,16 @@ package api
 
 import (
 	"encoding/json"
-	"io"
 	"net/http"
 	"testing"
 	"time"
 )
 
-func readTopicObject(t *testing.T, response *http.Response) map[string]json.RawMessage {
+func readTopicJSON[T any](t *testing.T, response *http.Response) T {
 	t.Helper()
-	content, err := io.ReadAll(response.Body)
-	if err != nil {
-		t.Fatalf("read response: %v", err)
-	}
-	var object map[string]json.RawMessage
-	if err := json.Unmarshal(content, &object); err != nil {
-		t.Fatalf("decode response (%s): %v\n%s", response.Status, err, content)
-	}
-	return object
-}
-
-func readTopicObjects(t *testing.T, response *http.Response) []map[string]json.RawMessage {
-	t.Helper()
-	content, err := io.ReadAll(response.Body)
-	if err != nil {
-		t.Fatalf("read response: %v", err)
-	}
-	var objects []map[string]json.RawMessage
-	if err := json.Unmarshal(content, &objects); err != nil {
-		t.Fatalf("decode response (%s): %v\n%s", response.Status, err, content)
-	}
-	return objects
+	var value T
+	mustRead(t, response, &value)
+	return value
 }
 
 func topicText(t *testing.T, object map[string]json.RawMessage) (string, bool) {
@@ -59,7 +39,7 @@ func TestBookingTopicAppearsForOwner(t *testing.T) {
 	if r.StatusCode != http.StatusCreated {
 		t.Fatalf("create booking: %s", r.Status)
 	}
-	if topic, present := topicText(t, readTopicObject(t, r)); !present || topic != "Обсудить проект" {
+	if topic, present := topicText(t, readTopicJSON[map[string]json.RawMessage](t, r)); !present || topic != "Обсудить проект" {
 		t.Fatalf("created topic: present=%v topic=%q", present, topic)
 	}
 
@@ -69,7 +49,7 @@ func TestBookingTopicAppearsForOwner(t *testing.T) {
 	}
 
 	r = s.do(t, http.MethodGet, "/bookings", nil)
-	items := readTopicObjects(t, r)
+	items := readTopicJSON[[]map[string]json.RawMessage](t, r)
 	if len(items) != 1 {
 		t.Fatalf("bookings: %d, want 1", len(items))
 	}
@@ -89,11 +69,11 @@ func TestBookingWithoutTopicOmitsField(t *testing.T) {
 	if r.StatusCode != http.StatusCreated {
 		t.Fatalf("create booking: %s", r.Status)
 	}
-	if _, present := topicText(t, readTopicObject(t, r)); present {
+	if _, present := topicText(t, readTopicJSON[map[string]json.RawMessage](t, r)); present {
 		t.Fatal("created booking includes topic when none was provided")
 	}
 	r = s.do(t, http.MethodGet, "/bookings", nil)
-	items := readTopicObjects(t, r)
+	items := readTopicJSON[[]map[string]json.RawMessage](t, r)
 	if len(items) != 1 {
 		t.Fatalf("bookings: %d, want 1", len(items))
 	}

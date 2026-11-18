@@ -2,42 +2,17 @@ package api
 
 import (
 	"encoding/json"
-	"io"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 )
 
-func problemFieldNames(t *testing.T, response *http.Response) []string {
-	t.Helper()
-	content, err := io.ReadAll(response.Body)
-	if err != nil {
-		t.Fatalf("read response: %v", err)
-	}
-	var problem struct {
-		Fields []struct {
-			Field string `json:"field"`
-		} `json:"fields"`
-	}
-	if err := json.Unmarshal(content, &problem); err != nil {
-		t.Fatalf("decode problem (%s): %v\n%s", response.Status, err, content)
-	}
-	names := make([]string, 0, len(problem.Fields))
-	for _, field := range problem.Fields {
-		names = append(names, field.Field)
-	}
-	return names
-}
-
 func requireTopicFieldError(t *testing.T, response *http.Response) {
 	t.Helper()
-	for _, name := range problemFieldNames(t, response) {
-		if name == "topic" {
-			return
-		}
-	}
-	t.Fatalf("problem does not report the topic field")
+	var problem problemJSON
+	mustRead(t, response, &problem)
+	requireFieldProblem(t, problem, "topic")
 }
 
 func TestBookingTopicValidation(t *testing.T) {
@@ -78,7 +53,7 @@ func TestBookingTopicValidation(t *testing.T) {
 	if r.StatusCode != http.StatusCreated {
 		t.Fatalf("200 code points: %s, want 201", r.Status)
 	}
-	topic, present := topicText(t, readTopicObject(t, r))
+	topic, present := topicText(t, readTopicJSON[map[string]json.RawMessage](t, r))
 	if !present || topic != exact {
 		t.Fatalf("200 code points returned: present=%v runes=%d", present, len([]rune(topic)))
 	}
@@ -110,13 +85,29 @@ func TestBookingTopicValidation(t *testing.T) {
 	if count := bookingsAt("2026-12-31T10:30:00+03:00"); count != 0 {
 		t.Fatalf("CRLF topic created %d bookings", count)
 	}
+	for _, tc := range []struct {
+		start string
+		topic string
+	}{
+		{"2026-12-31T14:00:00+03:00", "Первая\vВторая"},
+		{"2026-12-31T14:30:00+03:00", "Первая\fВторая"},
+	} {
+		r = post(tc.start, tc.topic)
+		if r.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("vertical whitespace topic: %s, want 422", r.Status)
+		}
+		requireTopicFieldError(t, r)
+		if count := bookingsAt(tc.start); count != 0 {
+			t.Fatalf("vertical whitespace topic created %d bookings", count)
+		}
+	}
 
 	// Edge whitespace and newlines are removed before the length is measured.
 	r = post("2026-12-31T11:00:00+03:00", "\n  "+exact+" \t\n")
 	if r.StatusCode != http.StatusCreated {
 		t.Fatalf("padded 200 code points: %s, want 201", r.Status)
 	}
-	topic, present = topicText(t, readTopicObject(t, r))
+	topic, present = topicText(t, readTopicJSON[map[string]json.RawMessage](t, r))
 	if !present || topic != exact {
 		t.Fatalf("padded 200 code points returned: present=%v runes=%d", present, len([]rune(topic)))
 	}
@@ -134,7 +125,7 @@ func TestBookingTopicValidation(t *testing.T) {
 	if r.StatusCode != http.StatusCreated {
 		t.Fatalf("whitespace-only topic: %s, want 201", r.Status)
 	}
-	if _, present := topicText(t, readTopicObject(t, r)); present {
+	if _, present := topicText(t, readTopicJSON[map[string]json.RawMessage](t, r)); present {
 		t.Fatal("whitespace-only topic was stored")
 	}
 

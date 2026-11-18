@@ -133,7 +133,7 @@ func (o operations) GetAvailability(_ context.Context, req api.GetAvailabilityRe
 }
 
 func isTopicLineBreak(r rune) bool {
-	return r == '\n' || r == '\r' || r == '\u0085' || r == '\u2028' || r == '\u2029'
+	return r == '\n' || r == '\r' || r == '\v' || r == '\f' || r == '\u0085' || r == '\u2028' || r == '\u2029'
 }
 
 // sanitizeTopic trims edge whitespace and validates the optional conversation
