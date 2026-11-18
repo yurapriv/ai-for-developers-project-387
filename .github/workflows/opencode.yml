@@ -81,10 +81,10 @@ jobs:
         if: steps.gate.outputs.result == 'true'
         shell: bash
         env:
-          MODEL: opencode/glm-5.3-flash-free
+          MODEL: opencode/deepseek-v4.1-flash-free
           MENTIONS: /opencode,/oc
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GH_TOKEN: ${{ github.token }}
           OPENCODE_DISABLE_PROJECT_CONFIG: 'true'
-          OPENCODE_CONFIG_CONTENT: '{"share":"disabled","instructions":["{env:GITHUB_WORKSPACE}/AGENTS.md"],"small_model":"opencode/glm-5.3-flash-free","skills":{"paths":[".opencode/skills"]}}'
+          OPENCODE_CONFIG_CONTENT: '{"share":"disabled","instructions":["{env:GITHUB_WORKSPACE}/AGENTS.md"],"small_model":"opencode/deepseek-v4.1-flash-free","skills":{"paths":[".opencode/skills"]}}'
         run: '"$RUNNER_TEMP/opencode-bin/opencode" github run'

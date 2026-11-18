@@ -71,11 +71,11 @@ jobs:
         if: steps.recheck.outputs.result == 'true'
         shell: bash
         env:
-          MODEL: opencode/glm-5.3-flash-free
+          MODEL: opencode/deepseek-v4.1-flash-free
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GH_TOKEN: ${{ github.token }}
           OPENCODE_DISABLE_PROJECT_CONFIG: 'true'
-          OPENCODE_CONFIG_CONTENT: '{"share":"disabled","instructions":["{env:GITHUB_WORKSPACE}/AGENTS.md"],"small_model":"opencode/glm-5.3-flash-free","skills":{"paths":[".opencode/skills"]}}'
+          OPENCODE_CONFIG_CONTENT: '{"share":"disabled","instructions":["{env:GITHUB_WORKSPACE}/AGENTS.md"],"small_model":"opencode/deepseek-v4.1-flash-free","skills":{"paths":[".opencode/skills"]}}'
           PROMPT: |
             Выполни предварительный разбор нового обращения по скиллу triage и настройкам
             трекера в docs/agents/. Изучи существующее приложение, укажи, что уже работает,
