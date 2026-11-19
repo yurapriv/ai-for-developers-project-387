@@ -4,10 +4,15 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
 
 permissions:
   contents: read
+
+concurrency:
+  group: quality-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check:
@@ -94,3 +99,26 @@ jobs:
             test-results/
           retention-days: 14
           if-no-files-found: error
+
+  pr-review:
+    needs: [check, exact-head-browser]
+    if: >-
+      github.event_name == 'pull_request' &&
+      !github.event.pull_request.draft &&
+      github.event.pull_request.head.repo.id == github.event.repository.id &&
+      github.event.pull_request.head.ref != github.event.repository.default_branch &&
+      ((github.event.pull_request.user.type == 'User' &&
+       github.event.pull_request.user.login == github.repository_owner) ||
+       (github.event.pull_request.user.type == 'Bot' &&
+       github.event.pull_request.user.id == 219766164 &&
+       github.event.pull_request.user.login == 'opencode-agent[bot]'))
+    permissions:
+      contents: read
+      issues: read
+      actions: read
+      checks: read
+      statuses: read
+      pull-requests: write
+    uses: ./.github/workflows/pr-review.yml
+    secrets:
+      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}

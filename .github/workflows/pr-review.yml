@@ -1,29 +1,17 @@
 name: PR review
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    branches: [main]
+  workflow_call:
+    secrets:
+      OPENCODE_API_KEY:
+        required: true
 
 permissions: {}
 
-concurrency:
-  group: pr-review-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
-
 jobs:
   review:
-    if: >-
-      !github.event.pull_request.draft &&
-      github.event.pull_request.head.repo.id == github.event.repository.id &&
-      github.event.pull_request.head.ref != github.event.repository.default_branch &&
-      ((github.event.pull_request.user.type == 'User' &&
-       github.event.pull_request.user.login == github.repository_owner) ||
-       (github.event.pull_request.user.type == 'Bot' &&
-       github.event.pull_request.user.id == 219766164 &&
-       github.event.pull_request.user.login == 'opencode-agent[bot]'))
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 25
     permissions:
       contents: read
       issues: read
@@ -63,12 +51,13 @@ jobs:
       - name: Generate read-only review (no GitHub token)
         id: review
         if: steps.context.outputs.ready == 'true'
-        timeout-minutes: 6
+        timeout-minutes: 21
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           OPENCODE_DISABLE_PROJECT_CONFIG: 'true'
           OPENCODE_MODEL: ${{ vars.OPENCODE_MODEL || 'opencode/deepseek-v4.1-flash-free' }}
           OPENCODE_CONFIG_CONTENT: '{"permission":{"*":"deny"},"share":"disabled"}'
+          REVIEW_TIMEOUT_MINUTES: '20'
         shell: bash
         run: |
           set -euo pipefail
@@ -77,12 +66,21 @@ jobs:
             exit 1
           fi
           printf 'OpenCode model: %q\n' "$OPENCODE_MODEL"
-          OPENCODE_CONFIG_CONTENT=$(node -p 'JSON.stringify({ ...JSON.parse(process.env.OPENCODE_CONFIG_CONTENT), small_model: process.env.OPENCODE_MODEL })')
+          OPENCODE_CONFIG_CONTENT=$(node --input-type=module <<'NODE'
+          const { OPENCODE_CONFIG_CONTENT, OPENCODE_MODEL, REVIEW_TIMEOUT_MINUTES } = process.env;
+          const config = JSON.parse(OPENCODE_CONFIG_CONTENT);
+          const [provider] = OPENCODE_MODEL.split('/');
+          const timeoutMs = Number(REVIEW_TIMEOUT_MINUTES) * 60_000;
+          config.small_model = OPENCODE_MODEL;
+          config.provider = { [provider]: { options: { headerTimeout: timeoutMs, chunkTimeout: timeoutMs } } };
+          console.log(JSON.stringify(config));
+          NODE
+          )
           export OPENCODE_CONFIG_CONTENT
           cd "$RUNNER_TEMP/reviewer"
           stderr="$RUNNER_TEMP/review-stderr.log"
           code=0
-          timeout --kill-after=15s 5m opencode --print-logs --log-level ERROR run \
+          timeout --kill-after=15s "${REVIEW_TIMEOUT_MINUTES}m" opencode --print-logs --log-level ERROR run \
             --title 'Independent PR review' --model "$OPENCODE_MODEL" --format json \
             < "$RUNNER_TEMP/review-prompt.txt" > "$RUNNER_TEMP/review.jsonl" 2> "$stderr" || code=$?
           if (( code != 0 )); then
