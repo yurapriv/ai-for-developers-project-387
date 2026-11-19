@@ -57,7 +57,12 @@ test('недопустимая тема разговора показывает 
   await topic.fill('я'.repeat(201));
   await page.getByRole('button', { name: 'Записаться' }).click();
   await expect(topic).toHaveAttribute('aria-invalid', 'true');
-  await expect(page.getByRole('alert').first()).toBeVisible();
+  const describedBy = await topic.getAttribute('aria-describedby');
+  expect(describedBy).toBeTruthy();
+  const fieldError = page.locator(`[id="${describedBy}"]`);
+  await expect(fieldError).toBeVisible();
+  await expect(fieldError).toHaveAttribute('role', 'alert');
+  await expect(fieldError).toHaveText(/\S/);
   await expect(page.getByRole('heading', { name: 'Запись подтверждена' })).toHaveCount(0);
   const bookings = await request.get('http://127.0.0.1:8080/bookings');
   expect(await bookings.json()).toHaveLength(0);

@@ -292,9 +292,14 @@ function SlotPicker({ meetingType, onBack }: { meetingType: MeetingType; onBack:
                 value={topic}
                 onChange={(event) => setTopic(event.target.value)}
                 aria-invalid={!!errors.topic}
+                aria-describedby={errors.topic ? 'booking-topic-error' : undefined}
               />
             </label>
-            {errors.topic && <p role="alert">{errors.topic}</p>}
+            {errors.topic && (
+              <p role="alert" id="booking-topic-error">
+                {errors.topic}
+              </p>
+            )}
             <button type="submit" disabled={pending}>
               {pending ? 'Отправка…' : 'Записаться'}
             </button>
