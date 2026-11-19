@@ -10,6 +10,11 @@ import (
 // Two overlapping bookings race: one carries a conversation topic, the other
 // does not. Exactly one request wins, the slot ends up with a single stored
 // booking, and its topic follows the winning request.
+//
+// Worker goroutines never fail the test themselves: HTTP and OpenAPI failures
+// travel on the result channel to the test goroutine, which owns t.Fatalf, so
+// a failed request cannot leave the channel read blocked until the package
+// timeout.
 func TestConcurrentOverlappingBookingsTopicFollowsWinner(t *testing.T) {
 	now, _ := time.Parse(time.RFC3339, "2026-12-31T05:00:00Z")
 	s := bookingAcceptanceServer(t, func() time.Time { return now })
@@ -21,6 +26,7 @@ func TestConcurrentOverlappingBookingsTopicFollowsWinner(t *testing.T) {
 		status    int
 		topic     string
 		present   bool
+		err       error
 	}
 	ready := make(chan struct{})
 	results := make(chan outcome, 2)
@@ -34,16 +40,34 @@ func TestConcurrentOverlappingBookingsTopicFollowsWinner(t *testing.T) {
 		}
 		go func(withTopic bool, payload map[string]any) {
 			<-ready
-			r := s.do(t, http.MethodPost, "/bookings", payload)
-			out := outcome{withTopic: withTopic, status: r.StatusCode}
-			if r.StatusCode == http.StatusCreated {
-				out.topic, out.present = topicText(t, readTopicJSON[map[string]json.RawMessage](t, r))
+			response, err := s.doE(http.MethodPost, "/bookings", payload)
+			if err != nil {
+				results <- outcome{withTopic: withTopic, err: err}
+				return
+			}
+			out := outcome{withTopic: withTopic, status: response.StatusCode}
+			if response.StatusCode == http.StatusCreated {
+				body, err := readJSON[map[string]json.RawMessage](response)
+				if err != nil {
+					results <- outcome{withTopic: withTopic, err: err}
+					return
+				}
+				out.topic, out.present, err = topicField(body)
+				if err != nil {
+					results <- outcome{withTopic: withTopic, err: err}
+					return
+				}
 			}
 			results <- out
 		}(withTopic, payload)
 	}
 	close(ready)
 	a, b := <-results, <-results
+	for _, out := range []outcome{a, b} {
+		if out.err != nil {
+			t.Fatalf("request withTopic=%v: %v", out.withTopic, out.err)
+		}
+	}
 	if (a.status != http.StatusCreated || b.status != http.StatusConflict) &&
 		(a.status != http.StatusConflict || b.status != http.StatusCreated) {
 		t.Fatalf("statuses: %d, %d; want one 201 and one 409", a.status, b.status)

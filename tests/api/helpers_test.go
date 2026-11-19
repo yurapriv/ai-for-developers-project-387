@@ -220,11 +220,22 @@ func (s *apiServer) url(path string) string {
 // the generated OpenAPI contract before being returned.
 func (s *apiServer) do(t *testing.T, method, path string, payload any) *http.Response {
 	t.Helper()
+	response, err := s.doE(method, path, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return response
+}
+
+// doE performs the same request and OpenAPI validation as do but returns the
+// failure as an error, so a worker goroutine can hand it to the test goroutine
+// instead of failing the test from outside of it.
+func (s *apiServer) doE(method, path string, payload any) (*http.Response, error) {
 	var body io.Reader
 	if payload != nil {
 		encoded, err := json.Marshal(payload)
 		if err != nil {
-			t.Fatalf("marshal payload: %v", err)
+			return nil, fmt.Errorf("marshal payload: %w", err)
 		}
 		body = bytes.NewReader(encoded)
 	}
@@ -232,26 +243,26 @@ func (s *apiServer) do(t *testing.T, method, path string, payload any) *http.Res
 	defer cancel()
 	request, err := http.NewRequestWithContext(ctx, method, s.url(path), body)
 	if err != nil {
-		t.Fatal(err)
+		return nil, err
 	}
 	if payload != nil {
 		request.Header.Set("Content-Type", "application/json")
 	}
 	response, err := s.client.Do(request)
 	if err != nil {
-		t.Fatalf("%s %s: %v", method, path, err)
+		return nil, fmt.Errorf("%s %s: %w", method, path, err)
 	}
 	content, err := io.ReadAll(response.Body)
 	_ = response.Body.Close()
 	if err != nil {
-		t.Fatalf("%s %s: %v", method, path, err)
+		return nil, fmt.Errorf("%s %s: %w", method, path, err)
 	}
 	if err := validateResponse(ctx, s.spec, s.router, request, response, content); err != nil {
-		t.Fatalf("%s %s violates OpenAPI: %v", method, path, err)
+		return nil, fmt.Errorf("%s %s violates OpenAPI: %w", method, path, err)
 	}
 	// The contract validator consumed the buffered content; hand a fresh reader to the caller.
 	response.Body = io.NopCloser(bytes.NewReader(content))
-	return response
+	return response, nil
 }
 
 func validateResponse(ctx context.Context, spec *openapi3.T, router routers.Router, request *http.Request, response *http.Response, content []byte) error {
