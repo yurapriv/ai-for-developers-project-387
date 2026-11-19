@@ -264,11 +264,11 @@ Workflow использует тот же секрет `OPENCODE_API_KEY`, мо�
 
 OpenCode V2 получает prompt, числовые измерения, выдержки диагностики и
 открытые и закрытые issues, но не GitHub-токен и не доступ к инструментам.
-Модель выбирается общей Actions-переменной `OPENCODE_MODEL` и использует
-существующий secret `OPENCODE_API_KEY`. Не добавляйте в issues секреты: выдержки передаются
-модели. При ошибке модели, в том числе ограничении бесплатного тарифа, отчёт
-остаётся в Artifacts, а публикация не выполняется; автоматического перехода
-на платную модель нет.
+Модель выбирается общей Actions-переменной `OPENCODE_MODEL`: для успешных
+прогонов использовали `opencode-go/mimo-v2.6-flash`. Ключ берётся из
+существующего secret `OPENCODE_API_KEY`. Не добавляйте в issues секреты:
+выдержки передаются модели. При ошибке модели отчёт остаётся в Artifacts,
+а публикация не выполняется; автоматического переключения модели нет.
 
 Агент выбирает находку и проверяет смысловые совпадения. Отдельное задание
 с `GITHUB_TOKEN` и `issues: write` повторно читает issues и проверяет
@@ -278,12 +278,35 @@ OpenCode V2 получает prompt, числовые измерения, выд
 кода, PR и OIDC не выдаются. Реальные находки получают `needs-triage`: решение
 о реализации принимает владелец.
 
-**Результаты.** [Ручной прогон из `main`](https://github.com/yurapriv/ai-for-developers-project-387/actions/runs/44395242897)
-остановился на проверке готовности Render. При повторе Lighthouse завершил все
-три замера: LCP ≈ 912 мс, CLS 0, TBT 45 мс — ниже заданных порогов.
-[Отчёт `lighthouse-live-2`](https://github.com/yurapriv/ai-for-developers-project-387/actions/runs/44395242897/artifacts/14471330367)
-сохранился, но OpenCode получил HTTP 429, поэтому вывод агента и публикация
-ещё не подтверждены. Успешный сквозной прогон и проверка дублей ещё впереди.
+**Результаты.** Три ручных прогона из `main` 19 ноября 2026 прошли успешно:
+
+1. [`live`](https://github.com/yurapriv/ai-for-developers-project-387/actions/runs/44603220460) сохранил
+   [три замера Lighthouse](https://github.com/yurapriv/ai-for-developers-project-387/actions/runs/44603220460/artifacts/14569991119).
+   Медианы LCP 890,4 мс, CLS 0 и TBT 52,5 мс ниже порогов. Агент не счёл
+   единичный выброс TBT находкой и опубликовал вывод в
+   [журнале #15](https://github.com/yurapriv/ai-for-developers-project-387/issues/15).
+   Новой задачи нет.
+2. [Первый `demo`](https://github.com/yurapriv/ai-for-developers-project-387/actions/runs/44604621403) сохранил
+   [синтетический JSON](https://github.com/yurapriv/ai-for-developers-project-387/actions/runs/44604621403/artifacts/14568842785).
+   По нему автоматически создан [учебный issue #20](https://github.com/yurapriv/ai-for-developers-project-387/issues/20):
+   вымышленная причина медленного LCP, предлагаемое действие и ссылка на прогон.
+3. [Повторный `demo`](https://github.com/yurapriv/ai-for-developers-project-387/actions/runs/44604977952) сохранил
+   [тот же синтетический JSON](https://github.com/yurapriv/ai-for-developers-project-387/actions/runs/44604977952/artifacts/14570052441):
+   SHA-256 файла совпал с первым прогоном. #20 остался единственным issue по этой
+   находке, без правок и комментариев.
+
+В [первой попытке](https://github.com/yurapriv/ai-for-developers-project-387/actions/runs/44395242897)
+не хватило времени на прогрев Render. После исправления [другой прогон](https://github.com/yurapriv/ai-for-developers-project-387/actions/runs/44455611986)
+переждал три ответа HTTP 503, получил HTTP 200 и сохранил Lighthouse-отчёт,
+но бесплатная модель всё ещё возвращала HTTP 429. Переключение модели через
+`OPENCODE_MODEL` позволило пройти шаг анализа и публикации без правок workflow.
+
+**Личный вывод.** Я обратил внимание, что бесплатный Render может не сразу
+вернуть страницу приложения. Мы увеличили время ожидания, и повторный прогон
+показал, что это помогло. Ещё стало видно, что сохранённый отчёт и успешный
+ответ агента — разные вещи: Lighthouse уже закончил работу, когда OpenCode
+упёрся в лимит. Для следующей попытки мы выбрали модель OpenCode Go через
+переменную GitHub Actions, не меняя код.
 
 Справка: [GitHub Actions: schedule](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule),
 [Lighthouse CI: collect](https://github.com/GoogleChrome/lighthouse-ci/blob/main/docs/configuration.md#collect),
