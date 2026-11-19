@@ -6,6 +6,7 @@ import {
   makePrompt,
   parseDecision,
   publish,
+  warmup,
 } from '../.github/scripts/lighthouse-audit.mjs';
 
 const url = 'https://calendar-booking-387-l7ns.onrender.com/booking';
@@ -70,6 +71,47 @@ function stubGitHub(issues = []) {
     },
   };
 }
+
+test('waits through a minute of Render loading pages before accepting the app HTML', async () => {
+  let elapsed = 0;
+  let attempts = 0;
+  await warmup(url, {
+    fetchPage: async (target, { headers }) => {
+      assert.equal(target, url);
+      assert.equal(headers.accept, 'text/html');
+      attempts++;
+      const page = elapsed < 60_000 ? 'Render loading' : '<title>Календарь встреч</title>';
+      return new Response(page, { headers: { 'content-type': 'text/html' } });
+    },
+    sleep: async (duration) => {
+      elapsed += duration;
+    },
+    now: () => elapsed,
+    log: () => {},
+  });
+  assert.equal(elapsed, 60_000);
+  assert.ok(attempts > 3);
+});
+
+test('stops after two minutes and logs status without exposing response bodies', async () => {
+  let elapsed = 0;
+  const log = [];
+  await assert.rejects(
+    warmup(url, {
+      fetchPage: async () => new Response('Response body must not be logged', { status: 503 }),
+      sleep: async (duration) => {
+        elapsed += duration;
+      },
+      now: () => elapsed,
+      log: (line) => log.push(line),
+    }),
+    /calendar HTML within 120s/u,
+  );
+  assert.equal(elapsed, 120_000);
+  assert.equal(log.length, 24);
+  assert.match(log[0], /HTTP 503, calendar HTML not ready/u);
+  assert.ok(log.every((line) => !line.includes('Response body')));
+});
 
 test('uses the median of three successful mobile measurements and projects diagnostic evidence', () => {
   const report = liveReport(url, [lhr(2400), lhr(4000), lhr(2900)]);

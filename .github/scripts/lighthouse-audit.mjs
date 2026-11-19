@@ -47,26 +47,42 @@ function appUrl(value) {
   return url.href;
 }
 
-async function warmup(url) {
-  for (let attempt = 1; attempt <= 3; attempt++) {
+export async function warmup(
+  url,
+  { fetchPage = fetch, sleep = delay, now = Date.now, log = console.info } = {},
+) {
+  // A Free Render service can answer with a loading page for about a minute.
+  const deadline = now() + 120_000;
+  for (let attempt = 1; now() < deadline; attempt++) {
+    let outcome;
     try {
-      const response = await fetch(url, {
+      const response = await fetchPage(url, {
         headers: { accept: 'text/html' },
-        redirect: 'error',
-        signal: AbortSignal.timeout(45_000),
+        redirect: 'manual',
+        signal: AbortSignal.timeout(Math.max(1, Math.min(15_000, deadline - now()))),
       });
       if (
         response.ok &&
         response.headers.get('content-type')?.includes('text/html') &&
-        (await response.text()).includes('Календарь встреч')
-      )
+        (await response.text()).includes('<title>Календарь встреч</title>')
+      ) {
+        log(`Render readiness attempt ${attempt}: HTTP ${response.status}, calendar HTML ready`);
         return;
-    } catch {
-      // Render can need time to wake up.
+      }
+      outcome = `HTTP ${response.status}, calendar HTML not ready`;
+      if (!response.bodyUsed) await response.body?.cancel();
+    } catch (error) {
+      const code = error?.cause?.code ?? error?.name;
+      outcome =
+        typeof code === 'string' && /^[a-z0-9_]{1,50}$/iu.test(code) ? code : 'request failed';
     }
-    if (attempt !== 3) await delay(5_000);
+    log(`Render readiness attempt ${attempt}: ${outcome}`);
+    const remaining = deadline - now();
+    if (remaining > 0) await sleep(Math.min(5_000, remaining));
   }
-  throw new Error('APP_URL did not serve the calendar HTML; no audit conclusion can be drawn');
+  throw new Error(
+    'APP_URL did not serve the calendar HTML within 120s; no audit conclusion can be drawn',
+  );
 }
 
 export function demoReport(url) {
