@@ -67,6 +67,7 @@ function SlotPicker({ meetingType, onBack }: { meetingType: MeetingType; onBack:
   const [retry, setRetry] = useState(0);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [topic, setTopic] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState('');
   const pending = useSyncExternalStore(subscribePending, () => bookingPending);
@@ -130,6 +131,7 @@ function SlotPicker({ meetingType, onBack }: { meetingType: MeetingType; onBack:
     if (!slot || bookingPending) return;
     const cleanName = name.trim();
     const cleanEmail = email.trim();
+    const cleanTopic = topic.trim();
     const fields: Record<string, string> = {};
     if (!cleanName || [...cleanName].length > 100) fields.name = 'Введите имя от 1 до 100 символов';
     if ([...cleanEmail].length > 254 || !/^[^@\s]+@[^@\s]+$/u.test(cleanEmail))
@@ -145,6 +147,7 @@ function SlotPicker({ meetingType, onBack }: { meetingType: MeetingType; onBack:
           start: slot.start,
           name: cleanName,
           email: cleanEmail,
+          ...(cleanTopic ? { topic: cleanTopic } : {}),
         },
       });
       if (result.data) {
@@ -283,6 +286,20 @@ function SlotPicker({ meetingType, onBack }: { meetingType: MeetingType; onBack:
               />
             </label>
             {errors.email && <p role="alert">{errors.email}</p>}
+            <label>
+              Тема разговора{' '}
+              <input
+                value={topic}
+                onChange={(event) => setTopic(event.target.value)}
+                aria-invalid={!!errors.topic}
+                aria-describedby={errors.topic ? 'booking-topic-error' : undefined}
+              />
+            </label>
+            {errors.topic && (
+              <p role="alert" id="booking-topic-error">
+                {errors.topic}
+              </p>
+            )}
             <button type="submit" disabled={pending}>
               {pending ? 'Отправка…' : 'Записаться'}
             </button>

@@ -51,6 +51,7 @@ type Booking struct {
 	MeetingType MeetingType `json:"meetingType"`
 	Name        string      `json:"name"`
 	Start       time.Time   `json:"start"`
+	Topic       *string     `json:"topic,omitempty"`
 }
 
 // BookingInput defines model for BookingInput.
@@ -59,6 +60,7 @@ type BookingInput struct {
 	MeetingTypeId int64     `json:"meetingTypeId"`
 	Name          string    `json:"name"`
 	Start         time.Time `json:"start"`
+	Topic         *string   `json:"topic,omitempty"`
 }
 
 // BookingWindow defines model for BookingWindow.
@@ -903,21 +905,21 @@ func (sh *strictHandler) CreateMeetingType(w http.ResponseWriter, r *http.Reques
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

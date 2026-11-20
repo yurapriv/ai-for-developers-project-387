@@ -15,6 +15,7 @@ export type Booking = {
     end: string;
     name: string;
     email: string;
+    topic?: string;
 };
 
 export type BookingInput = {
@@ -22,6 +23,7 @@ export type BookingInput = {
     start: string;
     name: string;
     email: string;
+    topic?: string;
 };
 
 export type BookingWindow = {
