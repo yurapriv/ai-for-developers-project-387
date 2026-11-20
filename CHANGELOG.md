@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.1.0](https://github.com/yurapriv/ai-for-developers-project-387/compare/v1.0.0...v1.1.0) (2026-11-20)
+
+
+### Features
+
+* show booking conversation topic to the owner ([df7de04](https://github.com/yurapriv/ai-for-developers-project-387/commit/df7de0433c182bbd85dfb54c2e50f0aeed983ba7)), closes [#5](https://github.com/yurapriv/ai-for-developers-project-387/issues/5)
+* support conversation topics in bookings ([d282c15](https://github.com/yurapriv/ai-for-developers-project-387/commit/d282c150fb41b08fd92561672cfa2519f7c0630a))
+* validate booking conversation topic ([27e87be](https://github.com/yurapriv/ai-for-developers-project-387/commit/27e87be939c4197f70e149a45febfa479b6503be)), closes [#6](https://github.com/yurapriv/ai-for-developers-project-387/issues/6)
+
+
+### Bug Fixes
+
+* load review links from pull request sections ([2d48944](https://github.com/yurapriv/ai-for-developers-project-387/commit/2d48944771d412c34508dbc5ec14dc7fce2acdef)), closes [#10](https://github.com/yurapriv/ai-for-developers-project-387/issues/10)
+* restore context and diagnose author review failures ([c96a889](https://github.com/yurapriv/ai-for-developers-project-387/commit/c96a889d615d67d8b9bddfee6e3b50ac244f98e3))
+* tie the topic validation error to the topic field ([d5aadb2](https://github.com/yurapriv/ai-for-developers-project-387/commit/d5aadb2257aab26de508a2488b31d5f18d90c1fc)), closes [#6](https://github.com/yurapriv/ai-for-developers-project-387/issues/6)
+* tighten conversation topic validation and tests ([3382b7a](https://github.com/yurapriv/ai-for-developers-project-387/commit/3382b7aa08975292b39e88503056c2f251c66bf4)), closes [#5](https://github.com/yurapriv/ai-for-developers-project-387/issues/5) [#6](https://github.com/yurapriv/ai-for-developers-project-387/issues/6)
+* use an available free OpenCode model ([0bfbfbe](https://github.com/yurapriv/ai-for-developers-project-387/commit/0bfbfbef1d3394882a9183a4e5ca2a2c755ef9db)), closes [#7](https://github.com/yurapriv/ai-for-developers-project-387/issues/7)
+* wait for the Render service to warm up ([7c286c0](https://github.com/yurapriv/ai-for-developers-project-387/commit/7c286c023e2560791d880f0d36816a5b43841c6d)), closes [#14](https://github.com/yurapriv/ai-for-developers-project-387/issues/14)
+* wait for the Render service to warm up ([#19](https://github.com/yurapriv/ai-for-developers-project-387/issues/19)) ([1096905](https://github.com/yurapriv/ai-for-developers-project-387/commit/10969057bda784ae377b3639bceafcbc7d670ed4)), closes [#14](https://github.com/yurapriv/ai-for-developers-project-387/issues/14)
+
 ## 1.0.0 (2026-11-15)
 
 
