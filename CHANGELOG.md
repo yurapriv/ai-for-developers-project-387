@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.1.0](https://github.com/yurapriv/ai-for-developers-project-387/compare/v1.0.0...v1.1.0) (2026-11-20)
+## [1.1.0](https://github.com/yurapriv/ai-for-developers-project-387/compare/61d3db3187d157a34c2baa6f00918a3f8dec5306...v1.1.0) (2026-11-21)
 
 
 ### Features
@@ -17,8 +17,7 @@
 * tie the topic validation error to the topic field ([d5aadb2](https://github.com/yurapriv/ai-for-developers-project-387/commit/d5aadb2257aab26de508a2488b31d5f18d90c1fc)), closes [#6](https://github.com/yurapriv/ai-for-developers-project-387/issues/6)
 * tighten conversation topic validation and tests ([3382b7a](https://github.com/yurapriv/ai-for-developers-project-387/commit/3382b7aa08975292b39e88503056c2f251c66bf4)), closes [#5](https://github.com/yurapriv/ai-for-developers-project-387/issues/5) [#6](https://github.com/yurapriv/ai-for-developers-project-387/issues/6)
 * use an available free OpenCode model ([0bfbfbe](https://github.com/yurapriv/ai-for-developers-project-387/commit/0bfbfbef1d3394882a9183a4e5ca2a2c755ef9db)), closes [#7](https://github.com/yurapriv/ai-for-developers-project-387/issues/7)
-* wait for the Render service to warm up ([7c286c0](https://github.com/yurapriv/ai-for-developers-project-387/commit/7c286c023e2560791d880f0d36816a5b43841c6d)), closes [#14](https://github.com/yurapriv/ai-for-developers-project-387/issues/14)
-* wait for the Render service to warm up ([#19](https://github.com/yurapriv/ai-for-developers-project-387/issues/19)) ([1096905](https://github.com/yurapriv/ai-for-developers-project-387/commit/10969057bda784ae377b3639bceafcbc7d670ed4)), closes [#14](https://github.com/yurapriv/ai-for-developers-project-387/issues/14)
+* wait for the Render service to warm up ([#19](https://github.com/yurapriv/ai-for-developers-project-387/pull/19)) ([1096905](https://github.com/yurapriv/ai-for-developers-project-387/commit/10969057bda784ae377b3639bceafcbc7d670ed4)), closes [#14](https://github.com/yurapriv/ai-for-developers-project-387/issues/14)
 
 ## 1.0.0 (2026-11-15)
 
